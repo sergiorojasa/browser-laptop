@@ -1181,6 +1181,14 @@ const windowActions = {
       bookmarkKey,
       type
     })
+  },
+
+  tabDragChangeGroupDisplayIndex: function (isPinned, destinationIndex) {
+    dispatch({
+      actionType: windowConstants.WINDOW_TAB_DRAG_CHANGE_GROUP_DISPLAY_INDEX,
+      isPinned,
+      destinationIndex
+    })
   }
 }
 

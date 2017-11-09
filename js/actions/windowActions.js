@@ -1189,6 +1189,19 @@ const windowActions = {
       isPinned,
       destinationIndex
     })
+  },
+
+  tabDragPausingForPageChange: function (pageIndex) {
+    dispatch({
+      actionType: windowConstants.WINDOW_TAB_DRAG_PAUSING_FOR_PAGE_CHANGE,
+      pageIndex
+    })
+  },
+
+  tabDragNotPausingForPageChange: function () {
+    dispatch({
+      actionType: windowConstants.WINDOW_TAB_DRAG_NOT_PAUSING_FOR_PAGE_CHANGE
+    })
   }
 }
 

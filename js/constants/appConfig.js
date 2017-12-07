@@ -146,6 +146,7 @@ module.exports = {
     'general.spellcheck-languages': Immutable.fromJS(['en-US']),
     'search.default-search-engine': 'Google',
     'search.offer-search-suggestions': false, // false by default for privacy reasons
+    'search.use-alternate-private-search-engine': false, // use true for DDG search in Private Tab
     'tabs.switch-to-new-tabs': false,
     'tabs.paint-tabs': true,
     'tabs.tabs-per-page': 20,
@@ -195,7 +196,7 @@ module.exports = {
     // After shown, set timestamp to next reconcile time - 1 day.
     'payments.notification-reconcile-soon-timestamp': null,
     'payments.notification-try-payments-dismissed': false, // True if you dismiss the message or enable Payments
-    'payments.notifications': false,
+    'payments.notifications': true,
     'payments.sites-auto-suggest': true,
     'payments.sites-hide-excluded': false,
     'payments.sites-show-less': true,

@@ -6,80 +6,73 @@
 // constants
 const appConstants = require('../../../js/constants/appConstants')
 const appConfig = require('../../../js/constants/appConfig')
-
+const settings = require('../../../js/constants/settings')
 
 // data things
-const tabState = require('../../common/state/tabState') /* for front tab */
-const pageDataState = require('../../common/state/pageDataState')
-const windowActions = require('../../../js/actions/windowActions') /* not sure this is needed */
-const windowConstants = require('../../../js/constants/windowConstants')
-
-//const BrowserWindow = require('electron')
+// const tabState = require('../../common/state/tabState') /* for front tab */
+// const pageDataState = require('../../common/state/pageDataState')
 
 // self & utils
 const userModel = require('../api/userModel.js')
 const userModelState = require('../../common/state/userModelState')
 
-
 // webContents.getFocusedWebContents()
 // all of these are todo
 const userModelReducer = (state, action, immutableAction) => {
-    if (!appConfig.adInsertion.enabled) {
-        return state
-    }
-    switch (action.actionType) {
+  if (!appConfig.adInsertion.enabled) {
+    return state
+  }
+  switch (action.actionType) {
     case appConstants.APP_SET_STATE:
-        state = userModel.initUM(state)
-        break
-    case appConstants.APP_TAB_UPDATED: 
-        state = userModel.tabUpdate(state, action)
-        break
-    case appConstants.APP_REMOVE_HISTORY_SITE:
-        state = userModel.removeHistorySite(state, action)
-        break
-    case appConstants.APP_ON_CLEAR_BROWSING_DATA:
-        state = userModel.removeAllHistory(state) 
-        break
-    case windowConstants.SET_TAB_HOVER_STATE:   // consider removing
-        state = userModel.userAction(state)
-        break
-    case windowConstants.SET_TAB_MOVE:         // ditto; probably no good
-        state = userModel.userAction(state)
-        break
-    case appConstants.APP_WINDOW_READY: //RESOURCE_READY
-        state = userModel.loadText(state, action)
-        break
-    case appConstants.APP_TEXT_SCRAPER_DATA_AVAILABLE:
-        state = userModel.loadText(state, action)
-        console.log('data in',action)
+      state = userModel.initUM(state)
+      break
     case appConstants.APP_TAB_UPDATED:
-        state=userModel.loadText(state)
-        break
+      state = userModel.tabUpdate(state, action)
+      break
+    case appConstants.APP_REMOVE_HISTORY_SITE:
+      state = userModel.removeHistorySite(state, action)
+      break
+    case appConstants.APP_ON_CLEAR_BROWSING_DATA:
+      state = userModel.removeAllHistory(state)
+      break
+    case appConstants.APP_WINDOW_READY: // RESOURCE_READY
+      state = userModel.testShoppingData(state, action)
+      state = userModel.testSearchState(state, action)
+      break
+    case appConstants.APP_IDLE_STATE_CHANGED:
+      if (action.has('idleState') && action.get('idleState') !== 'active') {
+        state = userModel.recordUnidle(state)
+      }
+      break
+    case appConstants.APP_TEXT_SCRAPER_DATA_AVAILABLE:
+    //    const lastActivTabId = pageDataState.getLastActiveTabId(state)
+    //    const tabId = action.get('tabId')
+    //    if (!lastActivTabId || tabId === lastActivTabId) {
+      state = userModel.classifyPage(state, action)
+      break
     case appConstants.APP_SHUTTING_DOWN:
-        state =  userModel.saveCachedInfo()
-        break
-    case (appConstants.APP_ADD_AUTOFILL_ADDRESS||appConstants.APP_ADD_AUTOFILL_CREDIT_CARD):
-        state = userModel.flagBuyingSomething(url) // where to get URL
-        break
+      state = userModel.saveCachedInfo()
+      break
+    case (appConstants.APP_ADD_AUTOFILL_ADDRESS || appConstants.APP_ADD_AUTOFILL_CREDIT_CARD):
+      const url = action.getIn(['details', 'newURL'])
+      state = userModelState.flagBuyingSomething(state, url)
+      break
     case appConstants.APP_CHANGE_SETTING: // all other settings go here
-        {
-            switch(action.get('key')) {
-            case settings.USERMODEL_ENABELED:
-                {
-                    state = userModel.initialize(state,action.get('value'))
-                    break
-                }
-            case settings.ADJUST_FREQ:
-                {
-                    state = userModel.changeAdFreq(state,action.get('value'))
-                }
+      {
+        switch (action.get('key')) {
+          case settings.USERMODEL_ENABELED:
+            {
+              state = userModel.initialize(state, action.get('value'))
+              break
+            }
+          case settings.ADJUST_FREQ:
+            {
+              state = userModel.changeAdFreq(state, action.get('value'))
             }
         }
-
-    } // end switch
-    return state
+      }
+  } // end switch
+  return state
 }
 
 module.exports = userModelReducer
-
-// TODO need something for search keys

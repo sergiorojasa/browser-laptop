@@ -5,16 +5,17 @@
 'use strict'
 
 // load utilities
-const Immutable = require('immutable')
-const path = require('path')
-const os = require('os')
-const levelUp = require('level')
-const historyUtil = require('../../common/lib/historyUtil.js')
+// const Immutable = require('immutable')
+// const path = require('path')
+// const os = require('os')
+// const levelUp = require('level')
+// const historyUtil = require('../../common/lib/historyUtil.js')
+const urlUtil = require('../../../js/lib/urlutil.js')
 
 // Actions
-const appActions = require('../../../js/actions/appActions')
+// const appActions = require('../../../js/actions/appActions')
 
-//State
+// State
 const userModelState = require('../../common/state/userModelState')
 
 // Definitions
@@ -27,67 +28,125 @@ const miliseconds = {
   second: 1000
 }
 
-
-
-// do things
-const tabUpdate = (state,action) => {
- // nothing but update the ums for now
-    state=userModelState.setUserActivity()
-    return state
+/* do things */
+const initialize = (state) => {
+  state = userModelState.setAdFrequency(state, 15)
+  return state
 }
 
+const tabUpdate = (state, action) => {
+  // nothing but update the ums for now
+  state = userModelState.setLastUserActivity(state)
+  return state
+}
+
+/* these two are pretty similar, userAction presently unused but maybe needed */
+const userAction = (state) => {
+  state = userModelState.setUserActivity()
+  return state
+}
 
 const removeHistorySite = (state, action) => {
-// check to see how ledger removes history
+  // check to see how ledger removes history
+  // first need to establish site classification DB in userModelState
 }
 
 const removeAllHistory = (state) => {
-// reset wherever you put the history
-}
-
-
-const userAction = (state) => {
-    state=userModelState.setUserActivity()
-    return state
-}
-
-const loadText = (state) => {
-    // this gets the text from wherever textScaper puts it
+  // reset wherever you put the history
 }
 
 const saveCachedInfo = () => {
-// writes stuff to leveldb
+  // writes stuff to leveldb
 }
 
-const shoppingData= (url) => {
-    historyUtil.getHistory(url)
-    const url = "http://www.lugos.name"// really want acive yab
-    const score = 1.0 // will use some function of last time
-    userModelState.flagSearchState(state,url,score)
+const testShoppingData = (state, url) => {
+  const hostname = urlUtil.getHostName(url)
+  if (hostname === 'amazon.com') {
+    const score = 1.0
+    state = userModelState.flagShoppingState(state, url, score)
+  } else {
+    state = userModelState.unflagShoppingState(state)
+  }
+  return state
 }
 
-const flagBuyingSomething = (url) => {
-    
+const testSearchState = (state, url) => {
+  const hostname = urlUtil.getHostName(url)
+  if (hostname === 'google.com') {
+    const score = 1.0
+    state = userModelState.flagSearchState(state, url, score)
+  } else {
+    state = userModelState.unflagSearchState(state, url)
+  }
+  return state
 }
 
-const classifyPage = () => {
-// run NB on the code
+const recordUnidle = (state) => {
+  state = userModelState.setLastUserIdleStopTime(state)
+  return state
+}
+
+const classifyPage = (state, action) => {
+  console.log('data in', action)// run NB on the code
+  return state
+}
+
+// this needs a place where it can be called from in the reducer. when to check?
+const checkReadyAdServe = (state) => {
+  const lastAd = userModelState.getLastServedAd(state)
+  const prevadserv = lastAd.lastadtime
+  const prevadid = lastAd.lastadserved
+  const date = new Date().getTime()
+  const timeSinceLastAd = date - prevadserv
+  // make sure you're not serving one too quickly or the same one as last time
+  const shoppingp = userModelState.getShoppingState(state)
+  /* is the user shopping (this needs to be recency thing) define ad by the
+   running average class */
+  const ad = 1
+  if (shoppingp && (ad !== prevadid) && (timeSinceLastAd > miliseconds.hour)) {
+    serveAdNow(state, ad)
+  }
+}
+
+const serveAdNow = (state, ad) => {
+  /* do stuff which pushes the ad */
+}
+
+/* frequency a float meaning ads per day */
+const changeAdFrequency = (state, freq) => {
+  state = userModelState.setAdFrequency(state, freq)
+  return state
+}
+
+const privateTest = () => {
+  return 1
 }
 
 const getMethods = () => {
   const publicMethods = {
-      //always public
-  },
-
-    let privatemethods = {}
-    
-    if (process.env.NODE_ENV === 'test') {
-        privateMethods = {
-            // private if testing
-        }
+    initialize,
+    tabUpdate,
+    userAction,
+    removeHistorySite,
+    removeAllHistory,
+    testShoppingData,
+    saveCachedInfo,
+    testSearchState,
+    classifyPage,
+    checkReadyAdServe,
+    recordUnidle,
+    serveAdNow,
+    changeAdFrequency
   }
+
+  let privateMethods = {}
+
+  if (process.env.NODE_ENV === 'test') {
+    privateMethods = {
+      privateTest
+      // private if testing
+    }
+  }
+  return Object.assign({}, publicMethods, privateMethods)
 }
-
 module.exports = getMethods()
-
-

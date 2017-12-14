@@ -8,19 +8,47 @@ const {StyleSheet, css} = require('aphrodite/no-important')
 
 // Components
 const ReduxComponent = require('../reduxComponent')
-const Tab = require('./tab')
+const ConnectedDragSortDetachTab = require('./connectedDragSortDetachTab')
 const ListWithTransitions = require('./ListWithTransitions')
 
-// Store
-const windowStore = require('../../../../js/stores/windowStore')
+// Actions
+const appActions = require('../../../../js/actions/appActions')
+const windowActions = require('../../../../js/actions/windowActions')
 
 // Utils
 const frameStateUtil = require('../../../../js/state/frameStateUtil')
-const tabState = require('../../../common/state//tabState')
+const { getCurrentWindowId } = require('../../currentWindow')
 
 class PinnedTabs extends React.Component {
-  dropFrame (frameKey) {
-    return windowStore.getFrame(frameKey)
+  constructor (...args) {
+    super(...args)
+    this.onTabStartDragSortDetach = this.onTabStartDragSortDetach.bind(this)
+    this.onDragChangeIndex = this.onDragChangeIndex.bind(this)
+  }
+
+  onTabStartDragSortDetach (frame, clientX, clientY, screenX, screenY, dragElementWidth, dragElementHeight, relativeXDragStart, relativeYDragStart) {
+    appActions.tabDragStarted(
+      getCurrentWindowId(),
+      frame,
+      frame.get('tabId'),
+      clientX,
+      clientY,
+      screenX,
+      screenY,
+      dragElementWidth,
+      dragElementHeight,
+      relativeXDragStart,
+      relativeYDragStart,
+      false
+    )
+  }
+
+  onDragChangeIndex (currentIndex, destinationIndex) {
+    // We do not need to know which tab is changing index, since
+    // the currently-dragged tabId is stored on state.
+    // Move display index immediately
+    windowActions.tabDragChangeGroupDisplayIndex(true, destinationIndex)
+    return true
   }
 
   mergeProps (state, ownProps) {
@@ -30,7 +58,6 @@ class PinnedTabs extends React.Component {
     const props = {}
     // used in renderer
     props.pinnedTabs = pinnedFrames
-    props.draggingTabId = tabState.draggingTabId(state)
     return props
   }
 
@@ -65,12 +92,18 @@ class PinnedTabs extends React.Component {
       {
         this.props.pinnedTabs
           .map((frame, tabDisplayIndex) =>
-            <Tab
+            <ConnectedDragSortDetachTab
               frame={frame}
               key={`tab-${frame.get('tabId')}-${frame.get('key')}`}
-              isDragging={this.props.draggingTabId === frame.get('tabId')}
+              // required for DragSortDetachTab
+              dragData={frame}
+              dragCanDetach={false}
+              firstTabDisplayIndex={0}
               displayIndex={tabDisplayIndex}
               displayedTabCount={this.props.pinnedTabs.size}
+              totalTabCount={this.props.pinnedTabs.size}
+              onStartDragSortDetach={this.onTabStartDragSortDetach}
+              onDragChangeIndex={this.onDragChangeIndex}
             />
           )
       }

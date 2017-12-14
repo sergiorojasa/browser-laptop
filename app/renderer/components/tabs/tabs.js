@@ -10,7 +10,7 @@ const {StyleSheet, css} = require('aphrodite/no-important')
 const ReduxComponent = require('../reduxComponent')
 const BrowserButton = require('../common/browserButton')
 const LongPressButton = require('../common/longPressButton')
-const Tab = require('./tab')
+const ConnectedDragSortDetachTab = require('./connectedDragSortDetachTab')
 const ListWithTransitions = require('./ListWithTransitions')
 
 // Actions
@@ -38,6 +38,9 @@ const {theme} = require('../styles/theme')
 
 const newTabButton = require('../../../../img/toolbar/newtab_btn.svg')
 
+// time to wait before moving page during a tab drag
+const DRAG_PAGEMOVE_MS_TIME_BUFFER = 1000
+
 class Tabs extends React.Component {
   constructor (props) {
     super(props)
@@ -47,6 +50,10 @@ class Tabs extends React.Component {
     this.onNextPage = this.onNextPage.bind(this)
     this.onNewTabLongPress = this.onNewTabLongPress.bind(this)
     this.onMouseLeave = this.onMouseLeave.bind(this)
+    this.onTabStartDragSortDetach = this.onTabStartDragSortDetach.bind(this)
+    this.onRequestDetachTab = this.onRequestDetachTab.bind(this)
+    this.onDragMoveSingleTabWindow = this.onDragMoveSingleTabWindow.bind(this)
+    this.onDragChangeIndex = this.onDragChangeIndex.bind(this)
   }
 
   onMouseLeave () {
@@ -88,11 +95,98 @@ class Tabs extends React.Component {
   }
 
   onDragOver (e) {
-    let intersection = e.dataTransfer.types.filter((x) => ['Files'].includes(x))
-    if (intersection.length > 0) {
+    if (e.dataTransfer.types.some(x => x === 'Files')) {
       e.dataTransfer.dropEffect = 'copy'
       e.preventDefault()
     }
+  }
+
+  onTabStartDragSortDetach (frame, clientX, clientY, screenX, screenY, dragElementWidth, dragElementHeight, relativeXDragStart, relativeYDragStart) {
+    appActions.tabDragStarted(
+      getCurrentWindowId(),
+      frame,
+      frame.get('tabId'),
+      clientX,
+      clientY,
+      screenX,
+      screenY,
+      dragElementWidth,
+      dragElementHeight,
+      relativeXDragStart,
+      relativeYDragStart,
+      this.props.totalTabCount === 1
+    )
+  }
+
+  onRequestDetachTab (itemX, itemY) {
+    appActions.tabDragDetachRequested(itemX, itemY)
+  }
+
+  onDragMoveSingleTabWindow (itemX, itemY) {
+    // we do not need to send the cursor pos as it will be read by the store, since
+    // it may move between here and there
+    appActions.tabDragSingleTabMoved(itemX, itemY, getCurrentWindowId())
+  }
+
+  onDragChangeIndex (currentIndex, destinationIndex) {
+    // we do not need to know which tab is changing index, since
+    // the currently-dragged tabId is stored on state
+    let shouldPauseDraggingUntilUpdate = false
+    // handle any destination index change by dispatching actions to store
+    if (currentIndex !== destinationIndex) {
+      // only allow to drag to a different page if we hang here for a while
+      const firstIndexOnCurrentPage = this.props.firstTabDisplayIndex
+      const lastIndexOnCurrentPage = firstIndexOnCurrentPage + this.props.currentTabs.size - 1
+      const isDraggingToPreviousPage = destinationIndex < firstIndexOnCurrentPage
+      const isDraggingToNextPage = destinationIndex > lastIndexOnCurrentPage
+      const isDraggingToDifferentPage = isDraggingToPreviousPage || isDraggingToNextPage
+      if (isDraggingToDifferentPage) {
+        // dragging to a different page
+        // first, at least make sure the tab has moved to the index just next to the threshold
+        // (since we might have done a big jump)
+        if (isDraggingToNextPage && currentIndex !== lastIndexOnCurrentPage) {
+          shouldPauseDraggingUntilUpdate = true
+          windowActions.tabDragChangeGroupDisplayIndex(false, lastIndexOnCurrentPage)
+        } else if (isDraggingToPreviousPage && currentIndex !== firstIndexOnCurrentPage) {
+          shouldPauseDraggingUntilUpdate = true
+          windowActions.tabDragChangeGroupDisplayIndex(false, firstIndexOnCurrentPage)
+        }
+        // make sure the user wants to change page by enforcing a pause
+        this.beginOrContinueTimeoutForDragPageIndexMove(destinationIndex, this.props.tabPageIndex, this.props.firstTabDisplayIndex)
+      } else {
+        // dragging to a different index within the same page,
+        // so clear the wait for changing page and move immediately
+        this.clearDragPageIndexMoveTimeout()
+        // move display index immediately
+        shouldPauseDraggingUntilUpdate = true
+        windowActions.tabDragChangeGroupDisplayIndex(false, destinationIndex)
+      }
+    } else {
+      // no longer want to change tab page
+      this.clearDragPageIndexMoveTimeout()
+    }
+    return shouldPauseDraggingUntilUpdate
+  }
+
+  clearDragPageIndexMoveTimeout () {
+    if (this.draggingMoveTabPageTimeout) {
+      window.clearTimeout(this.draggingMoveTabPageTimeout)
+      this.draggingMoveTabPageTimeout = null
+      // let store know we're done waiting
+      windowActions.tabDragNotPausingForPageChange()
+    }
+  }
+
+  beginOrContinueTimeoutForDragPageIndexMove (destinationIndex, currentTabPageIndex, firstTabDisplayIndex) {
+    // let store know we're waiting to change
+    if (!this.draggingMoveTabPageTimeout) {
+      const waitingForPageIndex = currentTabPageIndex + ((destinationIndex > firstTabDisplayIndex) ? 1 : -1)
+      windowActions.tabDragPausingForPageChange(waitingForPageIndex)
+    }
+    this.draggingMoveTabPageTimeout = this.draggingMoveTabPageTimeout || window.setTimeout(() => {
+      this.clearDragPageIndexMoveTimeout()
+      windowActions.tabDragChangeGroupDisplayIndex(false, destinationIndex)
+    }, DRAG_PAGEMOVE_MS_TIME_BUFFER)
   }
 
   newTab () {
@@ -197,16 +291,23 @@ class Tabs extends React.Component {
           {
             this.props.currentTabs
               .map((frame, tabDisplayIndex) =>
-                <Tab
+                <ConnectedDragSortDetachTab
                   key={`tab-${frame.get('tabId')}-${frame.get('key')}`}
+                  // required for tab component
                   frame={frame}
+                  partOfFullPageSet={this.props.partOfFullPageSet}
+                  // required for DragSortDetachTab
+                  dragData={frame}
+                  dragCanDetach
                   firstTabDisplayIndex={this.props.firstTabDisplayIndex}
                   displayIndex={tabDisplayIndex + this.props.firstTabDisplayIndex}
                   displayedTabCount={this.props.currentTabs.size}
                   totalTabCount={this.props.totalTabCount}
-                  singleTab={this.props.totalTabCount === 1}
-                  partOfFullPageSet={this.props.partOfFullPageSet}
                   tabPageIndex={displayedTabIndex}
+                  onStartDragSortDetach={this.onTabStartDragSortDetach}
+                  onRequestDetach={this.onRequestDetachTab}
+                  onDragMoveSingleItem={this.onDragMoveSingleTabWindow}
+                  onDragChangeIndex={this.onDragChangeIndex}
                 />
               )
           }

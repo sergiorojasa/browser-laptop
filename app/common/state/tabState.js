@@ -8,6 +8,7 @@ const assert = require('assert')
 // State
 const frameState = require('./frameState')
 const windowState = require('./windowState')
+const tabDraggingState = require('./tabDraggingState')
 
 // utils
 const { makeImmutable, isMap, isList } = require('./immutableUtil')
@@ -226,11 +227,7 @@ const tabState = {
   isTabDragging: (state, tabId) => {
     state = validateState(state)
     tabId = validateId('tabId', tabId)
-    const dragSourceData = state.get('tabDragData')
-    return (
-      dragSourceData &&
-      tabId === dragSourceData.get('sourceTabId')
-    )
+    return tabDraggingState.app.getSourceTabId(state) === tabId
   },
 
   draggingTabId: (state) => {

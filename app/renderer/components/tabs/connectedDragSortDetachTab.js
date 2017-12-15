@@ -18,8 +18,8 @@ function evaluateDraggingTabWidth (elementRef) {
     : isTabElement(elementRef.previousElementSibling)
       ? elementRef.previousElementSibling
       : null
-  const nonDraggingTabWidth = sibling ? sibling.getBoundingClientRect().width : null
-  const draggingTabWidth = elementRef.getBoundingClientRect().width
+  const nonDraggingItemWidth = sibling ? sibling.getBoundingClientRect().width : null
+  const draggingItemWidth = elementRef.getBoundingClientRect().width
   // save parent position in order to know where first-tab position is, and also the bounds for detaching
   // this is cached and re-evaluated whenever the drag operation starts (or is attached to a different window)
   // if, for some reason, the parent position can change during a drag operation, then this should be re-evaluated
@@ -46,8 +46,8 @@ function evaluateDraggingTabWidth (elementRef) {
     }
   }
   return {
-    draggingTabWidth,
-    nonDraggingTabWidth,
+    draggingItemWidth,
+    nonDraggingItemWidth,
     parentClientRect
   }
 }
@@ -64,9 +64,9 @@ const mergeStateToDraggableProps = (state, ownProps) => {
     onDragChangeIndex: ownProps.onDragChangeIndex,
     onDragMoveSingleItem: ownProps.onDragMoveSingleItem,
     displayIndex: ownProps.displayIndex,
-    totalTabCount: ownProps.totalTabCount || ownProps.displayedTabCount,
-    firstTabDisplayIndex: ownProps.firstTabDisplayIndex != null ? ownProps.firstTabDisplayIndex : 0,
-    displayedTabCount: ownProps.displayedTabCount,
+    totalItemCount: ownProps.totalTabCount || ownProps.displayedTabCount,
+    firstItemDisplayIndex: ownProps.firstItemDisplayIndex != null ? ownProps.firstItemDisplayIndex : 0,
+    displayedItemCount: ownProps.displayedTabCount,
     dragCanDetach: ownProps.dragCanDetach,
     dragData: ownProps.dragData
   }, ownProps)
@@ -92,14 +92,14 @@ const mergeStateToDraggableProps = (state, ownProps) => {
     props.relativeXDragStart = dragSourceData.get('relativeXDragStart')
     props.dragWindowClientX = dragSourceData.get('dragWindowClientX')
     props.dragWindowClientY = dragSourceData.get('dragWindowClientY')
-    props.detachedFromTabX = dragSourceData.get('detachedFromTabX')
+    props.detachedFromItemX = dragSourceData.get('detachedFromTabX')
   } else {
     props.isDragging = false
     props.dragProcessMoves = false
     props.relativeXDragStart = null
     props.dragWindowClientX = null
     props.dragWindowClientY = null
-    props.detachedFromTabX = null
+    props.detachedFromItemX = null
   }
   return props
 }

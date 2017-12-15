@@ -98,7 +98,7 @@ class PinnedTabs extends React.Component {
               // required for DragSortDetachTab
               dragData={frame}
               dragCanDetach={false}
-              firstTabDisplayIndex={0}
+              firstItemDisplayIndex={0}
               displayIndex={tabDisplayIndex}
               displayedTabCount={this.props.pinnedTabs.size}
               totalTabCount={this.props.pinnedTabs.size}

@@ -16,17 +16,17 @@ const DRAG_PAGEMOVE_PX_THRESHOLD = 38
 type Props = {
   /** The first index that is currently displayed and
    * able to be sorted to in a drag operation  */
-  firstTabDisplayIndex: number,
+  firstItemDisplayIndex: number,
   /** The total number of items, including any that
    * are not visible and not able to be dragged to
    */
-  totalTabCount: number,
+  totalItemCount: number,
   /** index of this item as it appears in the
    * currently-displayed group
    */
   displayIndex: number,
   /** Count of items in the currently-displayed group */
-  displayedTabCount: number,
+  displayedItemCount: number,
   /**
    * Called when the item has been dragged away from
    * the list
@@ -73,7 +73,7 @@ type Props = {
    * and it should stay at its previous parent offset until
    * the drag operation completes
    */
-  detachedFromTabX: number,
+  detachedFromItemX: number,
   /**
    * Number of pixels relative to the left edge of the element,
    * the drag was initiated by the pointing device at */
@@ -96,8 +96,8 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
     constructor (props) {
       super(props)
       this.onDragStart = this.onDragStart.bind(this)
-      this.onTabDraggingMouseMove = this.onTabDraggingMouseMove.bind(this)
-      this.onTabDraggingMouseMoveDetectSortChangeThrottled = throttle(this.onTabDraggingMouseMoveDetectSortChange.bind(this), 1)
+      this.onDraggingMouseMove = this.onDraggingMouseMove.bind(this)
+      this.onDraggingMouseMoveDetectSortChangeThrottled = throttle(this.onDraggingMouseMoveDetectSortChange.bind(this), 1)
     }
 
     //
@@ -105,30 +105,30 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
     //
 
     componentDidMount () {
-      // if a new tab is already dragging,
+      // if a new item is already dragging,
       // that means that it has been attached from another window,
       // or moved from another page.
-      // All we have to do is move the tab DOM element,
-      // and let the store know when the tab should move to another
-      // tab's position
+      // All we have to do is move the item DOM element,
+      // and let the store know when the item should move to another
+      // item's position
       if (this.props.isDragging) {
-        // setup tab moving
+        // setup item moving
         this.attachDragSortHandlers()
-        // if mount, dragging, and not single tab, then it is either
+        // if mount, dragging, and not single item, then it is either
         // an attach to the window
         // or a change in page
         if (!this.isSingleItem() && this.props.dragWindowClientX) {
-          // the tab will attach at the correct index, but the mouse may have moved since the attach was requested,
-          // so make sure we move the tab to the mouse position by forwarding the event
+          // the item will attach at the correct index, but the mouse may have moved since the attach was requested,
+          // so make sure we move the item to the mouse position by forwarding the event
           window.requestAnimationFrame(() => {
-            this.onTabDraggingMouseMove({ clientX: this.props.dragWindowClientX, clientY: this.props.dragWindowClientY })
+            this.onDraggingMouseMove({ clientX: this.props.dragWindowClientX, clientY: this.props.dragWindowClientY })
           })
         }
       }
     }
 
     componentWillUnmount () {
-      // tear-down tab moving if still setup
+      // tear-down item moving if still setup
       if (this.props.isDragging) {
         this.removeDragSortHandlers()
       }
@@ -136,10 +136,10 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
 
     componentDidUpdate (prevProps) {
       if (this.props.isDragging && prevProps.isDragging === false) {
-        // setup event to move tab DOM element along with
+        // setup event to move item DOM element along with
         // mousemove and let the store know when it should
-        // move the sort position of the tab.
-        // A different process (different because the window the tab is in may change)
+        // move the sort position of the item.
+        // A different process (different because the window the item is in may change)
         // is firing the event to the store which will check
         // for detach / attach to windows
         this.attachDragSortHandlers()
@@ -147,17 +147,17 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
         // since we may have attached but not received mouse event yet
         if (this.props.dragWindowClientX && this.props.dragWindowClientY) {
           window.requestAnimationFrame(() => {
-            this.onTabDraggingMouseMove({ clientX: this.props.dragWindowClientX, clientY: this.props.dragWindowClientY })
+            this.onDraggingMouseMove({ clientX: this.props.dragWindowClientX, clientY: this.props.dragWindowClientY })
           })
         }
       } else if (prevProps.isDragging && !this.props.isDragging) {
-        // tear-down tab moving
+        // tear-down item moving
         this.removeDragSortHandlers()
       } else if (this.props.isDragging && this.props.containerKey !== prevProps.containerKey) {
         // handle changing page index during a drag
-        // reevaluate anything that's changed when tab is dragged to a new page
-        this.draggingTabWidth = null
-        window.requestAnimationFrame(() => this.evaluateDraggingTabWidth())
+        // reevaluate anything that's changed when item is dragged to a new page
+        this.draggingItemWidth = null
+        window.requestAnimationFrame(() => this.evaluateDraggingItemWidth())
       }
 
       // mid-drag index change (due to dragging to a new position)
@@ -171,9 +171,9 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
         }
         // re-calculate the translation we need to apply to the element
         // after an index change, since the element position will be new
-        // but the mouse may have moved the tab away from its new location
+        // but the mouse may have moved the item away from its new location
         if (this.currentMouseX) {
-          this.dragTab({ clientX: this.currentMouseX })
+          this.dragItem({ clientX: this.currentMouseX })
           this.currentMouseX = null
         }
         // we pause the mousemove handler from being able to calculate new index based
@@ -196,22 +196,22 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
     //
 
     isSingleItem (props = this.props) {
-      return props.totalTabCount === 1
+      return props.totalItemCount === 1
     }
 
     /*
-    * Should be called whenever tab size changes. Since Chrome does not yet support ResizeObserver,
+    * Should be called whenever item size changes. Since Chrome does not yet support ResizeObserver,
     * we have to figure out the times. Luckily it's probably just initial drag start and when
-    * then tab page changes
+    * then item group index changes
     */
-    evaluateDraggingTabWidth () {
+    evaluateDraggingItemWidth () {
       if (!this.elementRef) {
         return
       }
       const itemSizeDetails = evaluateDraggingItemAndParentSize(this.elementRef)
       if (itemSizeDetails) {
-        this.draggingTabWidth = itemSizeDetails.draggingTabWidth
-        this.nonDraggingTabWidth = itemSizeDetails.nonDraggingTabWidth
+        this.draggingItemWidth = itemSizeDetails.draggingItemWidth
+        this.nonDraggingItemWidth = itemSizeDetails.nonDraggingItemWidth
         this.parentClientRect = itemSizeDetails.parentClientRect
       }
     }
@@ -221,8 +221,8 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
     // Only run by source window
     //
 
-    // Setup this tab window instance as the dragging source
-    // moving the tab and orchestrating order changes
+    // Setup this item's window instance as the dragging source
+    // moving the item and orchestrating order changes
     // as well as dispatching events to the store so it can
     // handle detach / attach
     // Because this drag event starts in this window's web context,
@@ -230,11 +230,11 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
     // If we start monitoring mousemove events in another window, it wouldn't
     // get position updates when the mouse moves outside the window, which we need
     // so we use the event instances started from this window to control the movement
-    // in any other window the tab may have been dragged to
+    // in any other window the item may have been dragged to
     onDragStart (e) {
       e.preventDefault()
-      // let the store know where on the tab the mouse is, so it can always
-      // keep the tab in the same place under the mouse, regardless of which
+      // let the store know where on the item element the mouse is, so it can always
+      // keep the item in the same place under the mouse, regardless of which
       // actual element from which window is being moved
       const dragElementBounds = e.target.getBoundingClientRect()
       const relativeXDragStart = e.clientX - dragElementBounds.left
@@ -253,40 +253,40 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
     }
 
     //
-    // Events for drag-sort amongst this tab group
-    // Run by any window that receives a dragged tab
+    // Events for drag-sort amongst this item's group
+    // Run by any window that receives a dragged item
     //
 
     attachDragSortHandlers () {
-      // get tab width
-      window.requestAnimationFrame(() => this.evaluateDraggingTabWidth())
-      // initial distance that has to be travelled outside the tab bar in order to detach the tab
+      // get item width
+      window.requestAnimationFrame(() => this.evaluateDraggingItemWidth())
+      // initial distance that has to be travelled outside the item's bounds in order to detach the item
       // (increases after some sorting has happened, as the user may be more 'relaxed' with the mouse)
       this.draggingDetachThreshold = DRAG_DETACH_PX_THRESHOLD_INITIAL
 
-      window.addEventListener('mousemove', this.onTabDraggingMouseMove)
-      if (this.isSingleItem() && this.props.detachedFromTabX) {
-        this.elementRef.style.setProperty('--dragging-delta-x', this.props.detachedFromTabX + 'px')
+      window.addEventListener('mousemove', this.onDraggingMouseMove)
+      if (this.isSingleItem() && this.props.detachedFromItemX) {
+        this.elementRef.style.setProperty('--dragging-delta-x', this.props.detachedFromItemX + 'px')
       }
     }
 
     removeDragSortHandlers () {
-      this.draggingTabWidth = null
+      this.draggingItemWidth = null
       this.parentClientRect = null
-      this.singleTabPosition = null
+      this.singleItemPosition = null
       this.currentWindowId = null
       this.suspendOrderChangeUntilUpdate = null
       this.whenProcessMoveE = null
-      window.removeEventListener('mousemove', this.onTabDraggingMouseMove)
+      window.removeEventListener('mousemove', this.onDraggingMouseMove)
       if (this.draggingDetachTimeout) {
         window.clearTimeout(this.draggingDetachTimeout)
         this.draggingDetachThreshold = null
       }
-      this.tabFinishedDragging()
+      this.itemFinishedDragging()
     }
 
-    tabFinishedDragging () {
-      // move tab back to it's actual position, from the mouse position
+    itemFinishedDragging () {
+      // move item back to it's actual position, from the mouse position
       if (this.elementRef) {
         window.requestAnimationFrame(() => {
           // need to check if element is still around
@@ -309,43 +309,43 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       }
     }
 
-    onTabDraggingMouseMove (e) {
+    onDraggingMouseMove (e) {
       e = translateEventFromSendMouseMoveInput(e)
       if (!this.isSingleItem() || !this.props.onDragMoveSingleItem) {
-        // move tab with mouse (rAF - smooth)
-        this.dragTabMouseMoveFrame = this.dragTabMouseMoveFrame || window.requestAnimationFrame(this.dragTab.bind(this, e))
+        // move item with mouse (rAF - smooth)
+        this.dragItemMouseMoveFrame = this.dragItemMouseMoveFrame || window.requestAnimationFrame(this.dragItem.bind(this, e))
       }
       if (this.props.dragProcessMoves) {
         if (!this.isSingleItem()) {
           // don't continue if we're about to detach
           // we'll soon get the props change to remove mouse event listeners
           if (!this.hasRequestedDetach) {
-            // change order of tabs when passed boundaries (debounced - helps being smooth)
-            this.onTabDraggingMouseMoveDetectSortChangeThrottled(e)
+            // change order of items when passed boundaries (debounced - helps being smooth)
+            this.onDraggingMouseMoveDetectSortChangeThrottled(e)
           }
         } else {
-          this.onTabDraggingMoveSingleTabWindow(e)
+          this.onItemDraggingMoveSingleItemWindow(e)
         }
       }
     }
 
-    dragTab (e) {
-      // cache just in case we need to force the tab to move to the mouse cursor
+    dragItem (e) {
+      // cache just in case we need to force the item to move to the mouse cursor
       // without a mousemove event
       this.currentMouseX = e.clientX
       if (!this.elementRef || !this.parentClientRect) {
         return
       }
-      this.dragTabMouseMoveFrame = null
+      this.dragItemMouseMoveFrame = null
       const relativeLeft = this.props.relativeXDragStart
-      // include any gap between parent edge and first tab
+      // include any gap between parent edge and first item
       const currentX = this.elementRef.offsetLeft - this.parentClientRect.offsetDifference
       const deltaX = this.currentMouseX - this.parentClientRect.left - currentX - relativeLeft
       this.elementRef.style.setProperty('--dragging-delta-x', deltaX + 'px')
     }
 
-    onTabDraggingMouseMoveDetectSortChange (e) {
-      if (!this.parentClientRect || !this.draggingTabWidth) {
+    onDraggingMouseMoveDetectSortChange (e) {
+      if (!this.parentClientRect || !this.draggingItemWidth) {
         return
       }
       // find when the order should be changed
@@ -354,13 +354,13 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       if (this.suspendOrderChangeUntilUpdate) {
         return
       }
-      // assumes all (non-dragging) tabs in this group have same width
-      // we need to consider the current drag tab width, and the width of the other tabs
-      // as they may differ due to using the width of the tab from the source window
+      // assumes all (non-dragging) items in this group have same width
+      // we need to consider the current drag item width, and the width of the other items
+      // as they may differ due to using the width of the item from the source window
       // during a drag operation
-      const dragTabWidth = this.draggingTabWidth
-      const tabWidth = this.nonDraggingTabWidth || this.draggingTabWidth
-      const tabLeft = e.clientX - this.parentClientRect.left - this.props.relativeXDragStart
+      const dragItemWidth = this.draggingItemWidth
+      const itemWidth = this.nondraggingItemWidth || this.draggingItemWidth
+      const itemLeft = e.clientX - this.parentClientRect.left - this.props.relativeXDragStart
       // detect when to ask for detach
       if (this.props.dragCanDetach) {
         // detach threshold is a time thing
@@ -374,7 +374,7 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
           // start a timeout to see if we're still outside, don't restart if we already started one
           this.draggingDetachTimeout = this.draggingDetachTimeout || window.setTimeout(() => {
             this.hasRequestedDetach = true
-            this.props.onRequestDetach(tabLeft, this.parentClientRect.top)
+            this.props.onRequestDetach(itemLeft, this.parentClientRect.top)
           }, DRAG_DETACH_MS_TIME_BUFFER)
           return
         } else {
@@ -385,12 +385,12 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
           }
         }
       }
-      // calculate destination index to move tab to
-      // based on coords of dragged tab
+      // calculate destination index to move item to
+      // based on coords of dragged item
       const destinationIndex = this.detectDragIndexPosition(
-        tabWidth,
-        dragTabWidth,
-        tabLeft
+        itemWidth,
+        dragItemWidth,
+        itemLeft
       )
       // ask consumer to change the index
       // it can respond that it will make the change async, and we shouldn't ask
@@ -407,39 +407,39 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       }
     }
 
-    detectDragIndexPosition (tabWidth, dragTabWidth, tabLeft) {
-      const lastIndex = this.props.totalTabCount - 1
-      const tabRight = tabLeft + dragTabWidth
-      if (tabLeft < 0 - DRAG_PAGEMOVE_PX_THRESHOLD) {
-        // tab is past the pagemove left threshold,
+    detectDragIndexPosition (itemWidth, dragItemWidth, itemLeft) {
+      const lastIndex = this.props.totalItemCount - 1
+      const itemRight = itemLeft + dragItemWidth
+      if (itemLeft < 0 - DRAG_PAGEMOVE_PX_THRESHOLD) {
+        // item is past the pagemove left threshold,
         // so ask for the last index of the previous page
         // unless we are already at the first page
-        return Math.max(0, this.props.firstTabDisplayIndex - 1)
-      } else if (tabRight > this.parentClientRect.width + DRAG_PAGEMOVE_PX_THRESHOLD) {
-        // tab is past the pagemove right threshold,
+        return Math.max(0, this.props.firstItemDisplayIndex - 1)
+      } else if (itemRight > this.parentClientRect.width + DRAG_PAGEMOVE_PX_THRESHOLD) {
+        // item is past the pagemove right threshold,
         // so ask for the first index of the next page
         // unless we are already at the last page
-        return Math.min(lastIndex, this.props.firstTabDisplayIndex + this.props.displayedTabCount)
+        return Math.min(lastIndex, this.props.firstItemDisplayIndex + this.props.displayedItemCount)
       } else {
-        // calculate which index within the group a tab would be if it started at
-        // the left edge of the dragged tab (do not consider the dragged tab width since it can be different)
-        const groupIndexOfTabLeft = Math.floor((tabLeft - (tabWidth / 2)) / tabWidth) + 1
-        // make sure the index we want to move the tab is within the allowed range
+        // calculate which index within the group a item would be if it started at
+        // the left edge of the dragged item (do not consider the dragged item width since it can be different)
+        const groupIndexOfItemLeft = Math.floor((itemLeft - (itemWidth / 2)) / itemWidth) + 1
+        // make sure the index we want to move the item is within the allowed range
         return Math.max(
           0,
-          Math.min(this.props.totalTabCount - 1, this.props.firstTabDisplayIndex + groupIndexOfTabLeft)
+          Math.min(this.props.totalItemCount - 1, this.props.firstItemDisplayIndex + groupIndexOfItemLeft)
         )
       }
     }
 
-    onTabDraggingMoveSingleTabWindow (e) {
+    onItemDraggingMoveSingleItemWindow (e) {
       if (!this.elementRef) {
         return
       }
-      // send the store the location of the tab to the window
+      // send the store the location of the item to the window
       // so that it can calculate where to move the window
       // cached
-      const { x, y } = this.singleTabPosition = this.singleTabPosition || this.elementRef.getBoundingClientRect()
+      const { x, y } = this.singleItemPosition = this.singleItemPosition || this.elementRef.getBoundingClientRect()
       if (this.props.onDragMoveSingleItem) {
         this.props.onDragMoveSingleItem(x, y)
       }

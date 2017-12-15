@@ -299,7 +299,7 @@ class Tabs extends React.Component {
                   // required for DragSortDetachTab
                   dragData={frame}
                   dragCanDetach
-                  firstTabDisplayIndex={this.props.firstTabDisplayIndex}
+                  firstItemDisplayIndex={this.props.firstTabDisplayIndex}
                   displayIndex={tabDisplayIndex + this.props.firstTabDisplayIndex}
                   displayedTabCount={this.props.currentTabs.size}
                   totalTabCount={this.props.totalTabCount}

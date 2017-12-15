@@ -446,7 +446,7 @@ const reducer = (state, action, immutableAction) => {
       const sourceTabId = dragSourceData.get('sourceTabId')
       const currentWindowId = tabState.getWindowId(state, sourceTabId)
       // attach the tab to the buffer window
-      const bufferWindow = windows.getDragBufferWindow()
+      const bufferWindow = windows.createBufferWindow()
       // unmark the buffer window, since it's now a real window
       // note that if the tab is moved to another window again,
       // the window will be re-used as a buffer

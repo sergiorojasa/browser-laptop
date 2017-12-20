@@ -9,7 +9,7 @@ const ReduxComponent = require('../reduxComponent')
 const ConnectedTab = require('./tab')
 
 function isTabElement (element) {
-  return element && element.getAttribute('data-tab-area')
+  return element != null && (element.getAttribute('data-tab-area') || false)
 }
 
 function evaluateDraggingTabWidth (elementRef) {
@@ -18,7 +18,11 @@ function evaluateDraggingTabWidth (elementRef) {
     : isTabElement(elementRef.previousElementSibling)
       ? elementRef.previousElementSibling
       : null
-  const nonDraggingItemWidth = sibling ? sibling.getBoundingClientRect().width : null
+  const parentElement = elementRef.parentElement
+  if (!parentElement) {
+    throw new Error('Cannot drag an element with no parent')
+  }
+  const nonDraggingItemWidth = sibling ? sibling.getBoundingClientRect().width : 0
   const draggingItemWidth = elementRef.getBoundingClientRect().width
   // save parent position in order to know where first-tab position is, and also the bounds for detaching
   // this is cached and re-evaluated whenever the drag operation starts (or is attached to a different window)
@@ -27,7 +31,8 @@ function evaluateDraggingTabWidth (elementRef) {
   // but only consider tabs within the parent, allowing us to have non sortable / draggable elements inside the parent
   // ...e.g. buttons
   let tabsSelector = '[data-draggable-tab]'
-  const allDraggableTabs = elementRef.parentElement.querySelectorAll(tabsSelector)
+
+  const allDraggableTabs = parentElement.querySelectorAll(tabsSelector)
   let parentClientRect
   if (allDraggableTabs.length) {
     const firstTab = allDraggableTabs.item(0)
@@ -35,14 +40,14 @@ function evaluateDraggingTabWidth (elementRef) {
     const firstTabRect = firstTab.getBoundingClientRect()
     const lastTabRect = firstTab === lastTab ? firstTabRect : lastTab.getBoundingClientRect()
     parentClientRect = {
-      x: firstTabRect.x,
-      y: firstTabRect.y,
+      x: firstTabRect.left,
+      y: firstTabRect.top,
       left: firstTabRect.left,
       top: firstTabRect.top,
-      width: lastTabRect.x + lastTabRect.width - firstTabRect.x,
+      width: lastTabRect.left + lastTabRect.width - firstTabRect.left,
       height: firstTabRect.height,
-      offsetDifference: firstTabRect.x - elementRef.parentElement.getBoundingClientRect().x,
-      windowWidth: document.body.clientWidth
+      offsetDifference: firstTabRect.left - parentElement.getBoundingClientRect().left,
+      windowWidth: document.body ? document.body.clientWidth : 0
     }
   }
   return {
@@ -51,6 +56,7 @@ function evaluateDraggingTabWidth (elementRef) {
     parentClientRect
   }
 }
+
 const DragSortDetachTab = withDragSortDetach(ConnectedTab, evaluateDraggingTabWidth)
 
 // give drag functionality the data from state it needs

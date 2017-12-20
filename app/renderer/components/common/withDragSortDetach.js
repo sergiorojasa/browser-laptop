@@ -31,16 +31,16 @@ type Props = {
    * Called when the item has been dragged away from
    * the list
    */
-  onRequestDetach: (number, number) => void,
+  onRequestDetach: (x: number, y: number) => void,
   /** Called when an item is dragged that has no siblings */
-  onDragMoveSingleItem: (number, number) => void,
+  onDragMoveSingleItem: (x: number, y: number) => void,
   /** Called when an item has been dragged past a threshold to a new index */
-  onDragChangeIndex: (Object, number) => Boolean,
+  onDragChangeIndex: (currentIndex: number, destinationIndex: number) => Boolean,
   /**
    * Request to start dragging. Caller should change the `isDragging` prop to `true`
    * in reponse to this call.
    */
-  onStartDragSortDetach: (any, number, number, number, number, number, number, number, number) => void,
+  onStartDragSortDetach: (dragData: any, clientX: number, clientY: number, screenX: number, screenY: number, dragElementWidth: number, dragElementHeight: number, relativeDragX: number, relativeDragY: number) => void,
   /** unique key for the currently-displayed group (i.e. page) */
   containerKey: any,
   /**
@@ -84,20 +84,67 @@ type Props = {
   dragCanDetach: Boolean,
 }
 
+type ChildProps = {
+  dragElementRef: HTMLElement => void,
+  onDragStart: SyntheticDragEvent<HTMLElement> => void
+}
+
+export type ParentClientRect = {
+  x: number,
+  y: number,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  offsetDifference: number,
+  windowWidth: number
+}
+
+type EvaluateDraggingItemAndParentSizeFunction = (HTMLElement) => ({
+  draggingItemWidth: number,
+  nonDraggingItemWidth: number,
+  parentClientRect: ParentClientRect
+})
+
+type MouseEventClientPoint = {
+  clientX: number,
+  clientY: number
+}
+
 // HACK - see the related `createEventFromSendMouseMoveInput` in tabDraggingWindowReducer.js
-function translateEventFromSendMouseMoveInput (receivedEvent) {
+function translateEventFromSendMouseMoveInput (receivedEvent: any): MouseEventClientPoint {
   return (receivedEvent.x === 1 && receivedEvent.y === 99)
-    ? { clientX: receivedEvent.screenX, clientY: receivedEvent.screenY }
+    ? { clientX: receivedEvent.screenX || 0, clientY: receivedEvent.screenY || 0 }
     : receivedEvent
 }
 
-module.exports = function withDragSortDetach (WrappedComponent: ReactElement, evaluateDraggingItemAndParentSize: Function) {
+module.exports = function withDragSortDetach (
+  WrappedComponent: React.ComponentType<Props & ChildProps>,
+  evaluateDraggingItemAndParentSize: EvaluateDraggingItemAndParentSizeFunction
+): React.ComponentType<Props> {
   class WithDragSortDetach extends React.Component<Props> {
-    constructor (props) {
+    static displayName = `WithDragSortDetach(${(typeof WrappedComponent.displayName === 'string' ? WrappedComponent.displayName : WrappedComponent.name) || 'Component'})`
+    onDraggingMouseMoveDetectSortChangeThrottled: Function
+    draggingDetachThreshold: ?number
+    draggingDetachTimeout: ?number
+    onNextDragIndexChange: ?Function
+    currentMouseX: ?number
+    suspendOrderChangeUntilUpdate: ?boolean
+    elementRef: ?HTMLElement
+    parentClientRect: ?ParentClientRect
+    draggingItemWidth: ?number
+    nonDraggingItemWidth: ?number
+    dragItemMouseMoveFrame: ?any
+    singleItemPosition: ?ClientRect
+    hasRequestedDetach: ?boolean
+
+    constructor (props: Props) {
       super(props)
-      this.onDragStart = this.onDragStart.bind(this)
-      this.onDraggingMouseMove = this.onDraggingMouseMove.bind(this)
       this.onDraggingMouseMoveDetectSortChangeThrottled = throttle(this.onDraggingMouseMoveDetectSortChange.bind(this), 1)
+    }
+
+    logWarning (...args: any) {
+      console.warn(`[${WithDragSortDetach.displayName || 'withDragSortDetach'}]`, ...args)
     }
 
     //
@@ -134,7 +181,7 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       }
     }
 
-    componentDidUpdate (prevProps) {
+    componentDidUpdate (prevProps: Props) {
       if (this.props.isDragging && prevProps.isDragging === false) {
         // setup event to move item DOM element along with
         // mousemove and let the store know when it should
@@ -173,7 +220,8 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
         // after an index change, since the element position will be new
         // but the mouse may have moved the item away from its new location
         if (this.currentMouseX) {
-          this.dragItem({ clientX: this.currentMouseX })
+          // TODO: support clientY position for horizontal drag distance
+          this.dragItem({ clientX: this.currentMouseX, clientY: 0 })
           this.currentMouseX = null
         }
         // we pause the mousemove handler from being able to calculate new index based
@@ -195,7 +243,7 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
     // Helpers
     //
 
-    isSingleItem (props = this.props) {
+    isSingleItem (props: Props = this.props) {
       return props.totalItemCount === 1
     }
 
@@ -231,12 +279,16 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
     // get position updates when the mouse moves outside the window, which we need
     // so we use the event instances started from this window to control the movement
     // in any other window the item may have been dragged to
-    onDragStart (e) {
+    onDragStart = (e: SyntheticDragEvent<HTMLElement>) => {
       e.preventDefault()
+      const dragElement: ?HTMLElement = e.target instanceof HTMLElement ? e.target : this.elementRef
+      if (!dragElement) {
+        throw new Error('No valid element target for drag start operation')
+      }
       // let the store know where on the item element the mouse is, so it can always
       // keep the item in the same place under the mouse, regardless of which
       // actual element from which window is being moved
-      const dragElementBounds = e.target.getBoundingClientRect()
+      const dragElementBounds = dragElement.getBoundingClientRect()
       const relativeXDragStart = e.clientX - dragElementBounds.left
       const relativeYDragStart = e.clientY - dragElementBounds.top
       this.props.onStartDragSortDetach(
@@ -266,7 +318,11 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
 
       window.addEventListener('mousemove', this.onDraggingMouseMove)
       if (this.isSingleItem() && this.props.detachedFromItemX) {
-        this.elementRef.style.setProperty('--dragging-delta-x', this.props.detachedFromItemX + 'px')
+        if (this.elementRef) {
+          this.elementRef.style.setProperty('--dragging-delta-x', this.props.detachedFromItemX + 'px')
+        } else {
+          console.warn(`[${WithDragSortDetach.displayName || 'withDragSortDetach'}] Ref element was not received in time for drag attach - could not set its visual position!`)
+        }
       }
     }
 
@@ -274,9 +330,7 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       this.draggingItemWidth = null
       this.parentClientRect = null
       this.singleItemPosition = null
-      this.currentWindowId = null
       this.suspendOrderChangeUntilUpdate = null
-      this.whenProcessMoveE = null
       window.removeEventListener('mousemove', this.onDraggingMouseMove)
       if (this.draggingDetachTimeout) {
         window.clearTimeout(this.draggingDetachTimeout)
@@ -295,7 +349,12 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
           }
           const lastPos = this.elementRef.style.getPropertyValue('--dragging-delta-x')
           if (lastPos !== '') { // default for a property not set is empty string
+            if (!this.elementRef) {
+              console.warn(`[${WithDragSortDetach.displayName || 'withDragSortDetach'}] itemFinishedDragging - Ref element was not received - could not set its visual position!`)
+              return
+            }
             this.elementRef.style.removeProperty('--dragging-delta-x')
+            // $FlowFixMe flow does not support .animate
             this.elementRef.animate([{
               transform: `translateX(${lastPos})`
             }, {
@@ -309,11 +368,11 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       }
     }
 
-    onDraggingMouseMove (e) {
-      e = translateEventFromSendMouseMoveInput(e)
+    onDraggingMouseMove = (e: MouseEventClientPoint) => {
+      const position = translateEventFromSendMouseMoveInput(e)
       if (!this.isSingleItem() || !this.props.onDragMoveSingleItem) {
         // move item with mouse (rAF - smooth)
-        this.dragItemMouseMoveFrame = this.dragItemMouseMoveFrame || window.requestAnimationFrame(this.dragItem.bind(this, e))
+        this.dragItemMouseMoveFrame = this.dragItemMouseMoveFrame || window.requestAnimationFrame(this.dragItem.bind(this, position))
       }
       if (this.props.dragProcessMoves) {
         if (!this.isSingleItem()) {
@@ -321,15 +380,15 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
           // we'll soon get the props change to remove mouse event listeners
           if (!this.hasRequestedDetach) {
             // change order of items when passed boundaries (debounced - helps being smooth)
-            this.onDraggingMouseMoveDetectSortChangeThrottled(e)
+            this.onDraggingMouseMoveDetectSortChangeThrottled(position)
           }
         } else {
-          this.onItemDraggingMoveSingleItemWindow(e)
+          this.onItemDraggingMoveSingleItemWindow()
         }
       }
     }
 
-    dragItem (e) {
+    dragItem (e: MouseEventClientPoint) {
       // cache just in case we need to force the item to move to the mouse cursor
       // without a mousemove event
       this.currentMouseX = e.clientX
@@ -344,7 +403,7 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       this.elementRef.style.setProperty('--dragging-delta-x', deltaX + 'px')
     }
 
-    onDraggingMouseMoveDetectSortChange (e) {
+    onDraggingMouseMoveDetectSortChange (e: MouseEventClientPoint) {
       if (!this.parentClientRect || !this.draggingItemWidth) {
         return
       }
@@ -359,7 +418,7 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       // as they may differ due to using the width of the item from the source window
       // during a drag operation
       const dragItemWidth = this.draggingItemWidth
-      const itemWidth = this.nondraggingItemWidth || this.draggingItemWidth
+      const itemWidth = this.nonDraggingItemWidth || this.draggingItemWidth
       const itemLeft = e.clientX - this.parentClientRect.left - this.props.relativeXDragStart
       // detect when to ask for detach
       if (this.props.dragCanDetach) {
@@ -368,13 +427,13 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
         const isOutsideBounds =
         e.clientX < 0 - DRAG_DETACH_PX_THRESHOLD_X ||
         e.clientX > this.parentClientRect.windowWidth + DRAG_DETACH_PX_THRESHOLD_X ||
-        e.clientY < this.parentClientRect.y - this.draggingDetachThreshold ||
+        e.clientY < this.parentClientRect.y - (this.draggingDetachThreshold || 0) ||
         e.clientY > this.parentClientRect.y + this.parentClientRect.height + this.draggingDetachThreshold
         if (isOutsideBounds) {
           // start a timeout to see if we're still outside, don't restart if we already started one
           this.draggingDetachTimeout = this.draggingDetachTimeout || window.setTimeout(() => {
             this.hasRequestedDetach = true
-            this.props.onRequestDetach(itemLeft, this.parentClientRect.top)
+            this.props.onRequestDetach(itemLeft, this.parentClientRect ? this.parentClientRect.top : 0)
           }, DRAG_DETACH_MS_TIME_BUFFER)
           return
         } else {
@@ -392,6 +451,9 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
         dragItemWidth,
         itemLeft
       )
+      if (destinationIndex == null) {
+        return
+      }
       // ask consumer to change the index
       // it can respond that it will make the change async, and we shouldn't ask
       // for a further index change until after the next index change (see cDU for that detection)
@@ -407,9 +469,13 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       }
     }
 
-    detectDragIndexPosition (itemWidth, dragItemWidth, itemLeft) {
+    detectDragIndexPosition (itemWidth: number, dragItemWidth: number, itemLeft: number): ?number {
       const lastIndex = this.props.totalItemCount - 1
       const itemRight = itemLeft + dragItemWidth
+      if (!this.parentClientRect || this.parentClientRect.width == null) {
+        this.logWarning('Required calculation of drag surface width was not provided!')
+        return
+      }
       if (itemLeft < 0 - DRAG_PAGEMOVE_PX_THRESHOLD) {
         // item is past the pagemove left threshold,
         // so ask for the last index of the previous page
@@ -432,21 +498,21 @@ module.exports = function withDragSortDetach (WrappedComponent: ReactElement, ev
       }
     }
 
-    onItemDraggingMoveSingleItemWindow (e) {
+    onItemDraggingMoveSingleItemWindow () {
       if (!this.elementRef) {
         return
       }
       // send the store the location of the item to the window
       // so that it can calculate where to move the window
       // cached
-      const { x, y } = this.singleItemPosition = this.singleItemPosition || this.elementRef.getBoundingClientRect()
+      const { left, top } = this.singleItemPosition = this.singleItemPosition || this.elementRef.getBoundingClientRect()
       if (this.props.onDragMoveSingleItem) {
-        this.props.onDragMoveSingleItem(x, y)
+        this.props.onDragMoveSingleItem(left, top)
       }
     }
     // class end
   }
   // give the component a meaningful name in case the render tree is inspected by a human
-  WithDragSortDetach.displayName = `WithDragSortDetach(${WrappedComponent.displayName || WrappedComponent.name || 'Component'})`
+//  WithDragSortDetach.displayName =
   return WithDragSortDetach
 }

@@ -128,6 +128,77 @@ function isMouseCursorOverWindowContent (browserWindow, cursorScreenPoint = scre
   return isClientPointWithinWindowBounds(browserWindow, windowClientPoint)
 }
 
+// BrowserWindow ctor options which can be manually
+// set after window creation
+const optionsSetCompatible = new Set([
+  'width',
+  'height',
+  'x',
+  'y',
+  'show',
+  'fullscreen',
+  'center',
+  'minWidth',
+  'minHeight',
+  'maxWidth',
+  'maxHeight',
+  'resizable',
+  'movable',
+  'alwaysOnTop',
+  'focusable',
+  'icon'
+])
+
+function canSetAllPropertiesOnExistingWindow (properties) {
+  return Object.keys(properties)
+    .some(optionKey =>
+      !optionsSetCompatible.has(optionKey)
+    )
+}
+
+function setPropertiesOnExistingWindow (browserWindow, properties) {
+  // set size and position
+  if (properties.x != null && properties.y != null) {
+    browserWindow.setPosition(properties.x, properties.y)
+  }
+  if (properties.width != null && properties.height != null) {
+    browserWindow.setSize(properties.width, properties.height)
+  }
+  if (properties.maxWidth != null && properties.maxHeight != null) {
+    browserWindow.setMaximumSize(properties.maxWidth, properties.maxHeight)
+  }
+  if (properties.minWidth != null && properties.minHeight != null) {
+    browserWindow.setMinimumSize(properties.minWidth, properties.minHeight)
+  }
+  if (properties.resizable != null) {
+    browserWindow.setResizable(properties.resizable)
+  }
+  if (properties.center === true) {
+    browserWindow.center()
+  }
+  if (properties.movable != null) {
+    browserWindow.setMovable(properties.movable)
+  }
+  if (properties.parent != null || properties.parent === null) {
+    browserWindow.setParent(properties.parent)
+  }
+  if (properties.icon != null) {
+    browserWindow.setIcon(properties.icon)
+  }
+  if (properties.show !== false) {
+    browserWindow.show()
+  }
+  if (properties.fullscreen) {
+    browserWindow.setFullScreen(true)
+  }
+  if (properties.alwaysOnTop) {
+    browserWindow.setAlwaysOnTop(true)
+  }
+  if (properties.focusable != null) {
+    browserWindow.setFocusable(properties.focusable)
+  }
+}
+
 module.exports = {
   getWindowClientPointAtCursor,
   getWindowClientPointAtScreenPoint,
@@ -137,5 +208,7 @@ module.exports = {
   getScreenPointAtWindowClientPoint,
   getWindowClientSize,
   isMouseCursorOverWindowContent,
-  isClientPointWithinWindowBounds
+  isClientPointWithinWindowBounds,
+  canSetAllPropertiesOnExistingWindow,
+  setPropertiesOnExistingWindow
 }

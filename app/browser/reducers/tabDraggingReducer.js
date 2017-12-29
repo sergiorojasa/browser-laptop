@@ -55,7 +55,7 @@ const reducer = (state, action, immutableAction) => {
       console.log('drag started from window', sourceWindowId)
       if (dragSourceData.get('originatedFromSingleTabWindow') === false) {
         // TODO: create at app startup
-        const bufferWindow = windows.createBufferWindow()
+        const bufferWindow = windows.getOrCreateBufferWindow()
         state = state.setIn([stateKey, 'bufferWindowId'], bufferWindow.id)
         // move buffer window to same pos as source window
         setImmediate(() => {
@@ -103,7 +103,7 @@ const reducer = (state, action, immutableAction) => {
       // return to original position, original window
       // delete state data
       state = state.delete(stateKey)
-      const bufferWin = windows.getDragBufferWindow()
+      const bufferWin = windows.getBufferWindow()
       if (bufferWin && bufferWin.isVisible()) {
         bufferWin.hide()
       }
@@ -126,7 +126,7 @@ const reducer = (state, action, immutableAction) => {
       }
       // delete state data
       state = state.delete(stateKey)
-      const bufferWin = windows.getDragBufferWindow()
+      const bufferWin = windows.getBufferWindow()
       if (bufferWin && bufferWin.isVisible()) {
         bufferWin.hide()
         bufferWin.setIgnoreMouseEvents(false)
@@ -407,7 +407,7 @@ const reducer = (state, action, immutableAction) => {
       // and also to keep the drag event going since it may
       // have been the originating window
       setImmediate(() => {
-        windows.setWindowIsDragBuffer(detachedWindowId)
+        windows.setWindowIsBufferWindow(detachedWindowId)
         const detachedWindow = BrowserWindow.fromId(detachedWindowId)
         // reset mouse events for window, so it works if used for another purpose later
         detachedWindow.setIgnoreMouseEvents(false)
@@ -446,11 +446,11 @@ const reducer = (state, action, immutableAction) => {
       const sourceTabId = dragSourceData.get('sourceTabId')
       const currentWindowId = tabState.getWindowId(state, sourceTabId)
       // attach the tab to the buffer window
-      const bufferWindow = windows.createBufferWindow()
+      const bufferWindow = windows.getOrCreateBufferWindow()
       // unmark the buffer window, since it's now a real window
       // note that if the tab is moved to another window again,
       // the window will be re-used as a buffer
-      windows.clearWindowIsDragBuffer()
+      windows.clearBufferWindow()
       setImmediate(() => {
         console.time('detachRequested')
         process.stdout.write('D-')
